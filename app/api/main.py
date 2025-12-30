@@ -1,5 +1,7 @@
 import requests
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import FHIR_BASE_URL
@@ -46,3 +48,8 @@ def ingest_observations_endpoint(
         return ingest_observations(db, client, patient_id=patient_id)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Upstream FHIR request failed: {exc}") from exc
+
+
+@app.exception_handler(ValidationError)
+def pydantic_validation_exception_handler(request, exc: ValidationError):
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
