@@ -10,6 +10,8 @@ services:
       # - FHIR_LAST_UPDATED_GTE=2025-01-01T00:00:00Z
     depends_on:
       - db
+    volumes:
+      - ./exports:/app/exports
 
   db:
     image: postgres:16
