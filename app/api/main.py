@@ -1,4 +1,5 @@
-from fastapi import Depends, FastAPI, Query
+import requests
+from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.config import FHIR_BASE_URL
@@ -29,7 +30,10 @@ def health():
 @app.post("/ingest/patients")
 def ingest_patients_endpoint(db: Session = Depends(get_db)):
     client = FHIRClient(FHIR_BASE_URL)
-    return ingest_patients(db, client)
+    try:
+        return ingest_patients(db, client)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream FHIR request failed: {exc}") from exc
 
 
 @app.post("/ingest/observations")
@@ -38,4 +42,7 @@ def ingest_observations_endpoint(
     db: Session = Depends(get_db),
 ):
     client = FHIRClient(FHIR_BASE_URL)
-    return ingest_observations(db, client, patient_id=patient_id)
+    try:
+        return ingest_observations(db, client, patient_id=patient_id)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream FHIR request failed: {exc}") from exc

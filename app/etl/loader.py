@@ -1,3 +1,6 @@
+import json
+
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -7,6 +10,21 @@ from app.models.tables import Observation, Patient
 def upsert_patients(db: Session, rows: list[dict]) -> int:
     if not rows:
         return 0
+
+    for row in rows:
+        if "raw" in row:
+            row["raw"] = jsonable_encoder(row["raw"])
+
+    for i, row in enumerate(rows[:3]):
+        try:
+            json.dumps(row["raw"])
+        except TypeError as exc:
+            print("BAD ROW INDEX:", i)
+            print("ERROR:", exc)
+            print("RAW TYPE:", type(row["raw"]))
+            print("RAW KEYS:", list(row["raw"].keys()) if isinstance(row["raw"], dict) else None)
+            raise
+
     stmt = insert(Patient).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=[Patient.id],
@@ -25,6 +43,11 @@ def upsert_patients(db: Session, rows: list[dict]) -> int:
 def upsert_observations(db: Session, rows: list[dict]) -> int:
     if not rows:
         return 0
+
+    for row in rows:
+        if "raw" in row:
+            row["raw"] = jsonable_encoder(row["raw"])
+
     stmt = insert(Observation).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=[Observation.id],

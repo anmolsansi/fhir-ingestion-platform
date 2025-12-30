@@ -7,27 +7,64 @@ from app.fhir.client import FHIRClient
 from app.fhir.validators import validate_observation, validate_patient
 
 
+def _safe_validate(items, validator, resource_type: str):
+    ok = []
+    bad = []
+    for item in items:
+        try:
+            ok.append(validator(item))
+        except Exception as exc:
+            bad.append(
+                {
+                    "resource_type": resource_type,
+                    "id": item.get("id"),
+                    "error": str(exc),
+                }
+            )
+    return ok, bad
+
+
 def ingest_patients(db: Session, client: FHIRClient) -> dict:
     params = {"_count": FHIR_PAGE_SIZE}
     if FHIR_LAST_UPDATED_GTE:
         params["_lastUpdated"] = f"ge{FHIR_LAST_UPDATED_GTE}"
 
-    raw_patients = client.search_all("Patient", params=params)
-    valid = [validate_patient(p) for p in raw_patients]
+    raw = client.search_all("Patient", params=params)
+    valid, invalid = _safe_validate(raw, validate_patient, "Patient")
     rows = [patient_to_row(p) for p in valid]
-    n = upsert_patients(db, rows)
-    return {"fetched": len(raw_patients), "upserted": n}
+    upserted = upsert_patients(db, rows)
+
+    return {
+        "resource": "Patient",
+        "fetched": len(raw),
+        "validated": len(valid),
+        "invalid": len(invalid),
+        "upserted": upserted,
+        "invalid_samples": invalid[:5],
+    }
 
 
 def ingest_observations(db: Session, client: FHIRClient, patient_id: str | None = None) -> dict:
     params = {"_count": FHIR_PAGE_SIZE}
+
     if patient_id:
         params["subject"] = f"Patient/{patient_id}"
+
+    params["code:missing"] = "false"
+
     if FHIR_LAST_UPDATED_GTE:
         params["_lastUpdated"] = f"ge{FHIR_LAST_UPDATED_GTE}"
 
-    raw_obs = client.search_all("Observation", params=params)
-    valid = [validate_observation(o) for o in raw_obs]
+    raw = client.search_all("Observation", params=params)
+    valid, invalid = _safe_validate(raw, validate_observation, "Observation")
     rows = [observation_to_row(o) for o in valid]
-    n = upsert_observations(db, rows)
-    return {"fetched": len(raw_obs), "upserted": n}
+    upserted = upsert_observations(db, rows)
+
+    return {
+        "resource": "Observation",
+        "fetched": len(raw),
+        "validated": len(valid),
+        "invalid": len(invalid),
+        "upserted": upserted,
+        "invalid_samples": invalid[:5],
+    }
