@@ -46,3 +46,10 @@ class IngestionRun(Base):
     finished_at: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="RUNNING")  # RUNNING/SUCCESS/FAILED
     details: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Checkpoint(Base):
+    __tablename__ = "checkpoints"
+    resource_type: Mapped[str] = mapped_column(String, primary_key=True)
+    last_successful_lastupdated: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[str] = mapped_column(String, default=lambda: func.now().cast(String))
