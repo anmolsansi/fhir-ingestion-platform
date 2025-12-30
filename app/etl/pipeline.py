@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import FHIR_LAST_UPDATED_GTE, FHIR_PAGE_SIZE
@@ -7,10 +8,10 @@ from app.etl.loader import upsert_observations, upsert_patients
 from app.etl.transform import observation_to_row, patient_to_row
 from app.fhir.client import FHIRClient
 from app.fhir.validators import validate_observation, validate_patient
-from app.models.tables import Checkpoint, Patient
+from app.models.tables import Checkpoint, DeadLetter, Patient
 
 
-def _safe_validate(items, validator, resource_type: str):
+def _safe_validate(db: Session, items, validator, resource_type: str):
     ok = []
     bad = 0
     for item in items:
@@ -24,7 +25,65 @@ def _safe_validate(items, validator, resource_type: str):
                 id=item.get("id"),
                 error=str(exc),
             )
+            db.add(
+                DeadLetter(
+                    run_id=None,
+                    resource_type=resource_type,
+                    resource_id=item.get("id"),
+                    stage="validate",
+                    error=str(exc)[:1000],
+                    raw=item,
+                )
+            )
     return ok, bad
+
+
+def _safe_transform(db: Session, items, transformer, resource_type: str):
+    rows = []
+    errors = 0
+    for item in items:
+        try:
+            rows.append(transformer(item))
+        except Exception as exc:
+            errors += 1
+            log.warning(
+                "transform_failed",
+                resource_type=resource_type,
+                id=item.get("id"),
+                error=str(exc),
+            )
+            db.add(
+                DeadLetter(
+                    run_id=None,
+                    resource_type=resource_type,
+                    resource_id=item.get("id"),
+                    stage="transform",
+                    error=str(exc)[:1000],
+                    raw=item,
+                )
+            )
+    return rows, errors
+
+
+def _safe_upsert(db: Session, rows: list[dict], upsert_fn, resource_type: str):
+    if not rows:
+        return 0, 0
+    try:
+        return upsert_fn(db, rows), 0
+    except Exception as exc:
+        log.error("load_failed", resource_type=resource_type, error=str(exc))
+        for row in rows:
+            db.add(
+                DeadLetter(
+                    run_id=None,
+                    resource_type=resource_type,
+                    resource_id=row.get("id"),
+                    stage="load",
+                    error=str(exc)[:1000],
+                    raw=row,
+                )
+            )
+        return 0, len(rows)
 
 
 def _ensure_patients_exist(db: Session, client: FHIRClient, patient_ids: set[str]) -> dict:
@@ -75,9 +134,9 @@ def ingest_patients(db: Session, client: FHIRClient) -> dict:
         params["_lastUpdated"] = f"ge{since}"
 
     raw = client.search_all(resource_type, params=params)
-    valid, invalid = _safe_validate(raw, validate_patient, resource_type)
-    rows = [patient_to_row(p) for p in valid]
-    upserted = upsert_patients(db, rows)
+    valid, invalid = _safe_validate(db, raw, validate_patient, resource_type)
+    rows, transform_errors = _safe_transform(db, valid, patient_to_row, resource_type)
+    upserted, load_errors = _safe_upsert(db, rows, upsert_patients, resource_type)
 
     max_last_updated = since_checkpoint
     for item in valid:
@@ -94,7 +153,9 @@ def ingest_patients(db: Session, client: FHIRClient) -> dict:
         "fetched": len(raw),
         "validated": len(valid),
         "invalid": invalid,
+        "transform_errors": transform_errors,
         "upserted": upserted,
+        "load_errors": load_errors,
         "new_checkpoint": max_last_updated,
     }
 
@@ -117,8 +178,8 @@ def ingest_observations(db: Session, client: FHIRClient, patient_id: str | None 
         params["_lastUpdated"] = f"ge{since}"
 
     raw = client.search_all(resource_type, params=params)
-    valid, invalid = _safe_validate(raw, validate_observation, resource_type)
-    rows = [observation_to_row(o) for o in valid]
+    valid, invalid = _safe_validate(db, raw, validate_observation, resource_type)
+    rows, transform_errors = _safe_transform(db, valid, observation_to_row, resource_type)
 
     patient_ids = {row["patient_id"] for row in rows if row.get("patient_id")}
     patient_backfill = _ensure_patients_exist(db, client, patient_ids)
@@ -131,7 +192,7 @@ def ingest_observations(db: Session, client: FHIRClient, patient_id: str | None 
     }
     final_rows = [row for row in rows if row.get("patient_id") in existing_after]
 
-    upserted = upsert_observations(db, final_rows)
+    upserted, load_errors = _safe_upsert(db, final_rows, upsert_observations, resource_type)
 
     max_last_updated = since_checkpoint
     for item in valid:
@@ -148,8 +209,10 @@ def ingest_observations(db: Session, client: FHIRClient, patient_id: str | None 
         "fetched": len(raw),
         "validated": len(valid),
         "invalid": invalid,
+        "transform_errors": transform_errors,
         "upserted": upserted,
         "patient_backfill": patient_backfill,
         "skipped_missing_patients": len(rows) - len(final_rows),
+        "load_errors": load_errors,
         "new_checkpoint": max_last_updated,
     }

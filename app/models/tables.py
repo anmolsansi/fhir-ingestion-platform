@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import String, Date, DateTime, JSON, ForeignKey, Text, func
+from sqlalchemy import Integer, String, Date, DateTime, JSON, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -53,3 +53,15 @@ class Checkpoint(Base):
     resource_type: Mapped[str] = mapped_column(String, primary_key=True)
     last_successful_lastupdated: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[str] = mapped_column(String, default=lambda: func.now().cast(String))
+
+
+class DeadLetter(Base):
+    __tablename__ = "dead_letters"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resource_type: Mapped[str] = mapped_column(String, index=True)
+    resource_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    stage: Mapped[str] = mapped_column(String)
+    error: Mapped[str] = mapped_column(String)
+    raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, default=lambda: func.now().cast(String))
