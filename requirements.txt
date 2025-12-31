@@ -3,9 +3,11 @@ uvicorn[standard]==0.32.1
 requests==2.32.3
 pydantic==2.10.3
 python-dotenv==1.0.1
+eval-type-backport==0.2.2
 
 SQLAlchemy==2.0.36
 psycopg2-binary==2.9.11
+httpx==0.28.1
 
 tenacity==9.0.0
 structlog==24.4.0
