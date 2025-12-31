@@ -1,0 +1,9 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+API_BASE_URL=http://api:8000
+
+0 * * * * /bin/sh -c 'sh /app/scripts/cron_runner.sh "$API_BASE_URL/ingest/patients?trigger=cron&job=scheduler.patients" "scheduler.patients"'
+10 * * * * /bin/sh -c 'sh /app/scripts/cron_runner.sh "$API_BASE_URL/ingest/observations?trigger=cron&job=scheduler.observations" "scheduler.observations"'
+20 * * * * /bin/sh -c 'sh /app/scripts/cron_runner.sh "$API_BASE_URL/ingest/encounters?trigger=cron&job=scheduler.encounters" "scheduler.encounters"'
+30 * * * * /bin/sh -c 'sh /app/scripts/cron_runner.sh "$API_BASE_URL/ingest/conditions?trigger=cron&job=scheduler.conditions" "scheduler.conditions"'
+30 2 * * * /bin/sh -c 'sh /app/scripts/cron_runner.sh "$API_BASE_URL/ingest/observations/backfill?trigger=cron&job=scheduler.observations_backfill" "scheduler.observations_backfill"'

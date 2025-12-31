@@ -29,6 +29,7 @@ def upsert_patients(db: Session, rows: list[dict]) -> int:
     stmt = stmt.on_conflict_do_update(
         index_elements=[Patient.id],
         set_={
+            "run_id": stmt.excluded.run_id,
             "family": stmt.excluded.family,
             "given": stmt.excluded.given,
             "gender": stmt.excluded.gender,
@@ -52,6 +53,7 @@ def upsert_observations(db: Session, rows: list[dict]) -> int:
     stmt = stmt.on_conflict_do_update(
         index_elements=[Observation.id],
         set_={
+            "run_id": stmt.excluded.run_id,
             "patient_id": stmt.excluded.patient_id,
             "status": stmt.excluded.status,
             "code": stmt.excluded.code,
@@ -74,6 +76,7 @@ def upsert_encounters(db: Session, rows: list[dict]) -> int:
     stmt = stmt.on_conflict_do_update(
         index_elements=[Encounter.id],
         set_={
+            "run_id": stmt.excluded.run_id,
             "patient_id": stmt.excluded.patient_id,
             "status": stmt.excluded.status,
             "encounter_class": stmt.excluded.encounter_class,
@@ -93,6 +96,7 @@ def upsert_conditions(db: Session, rows: list[dict]) -> int:
     stmt = stmt.on_conflict_do_update(
         index_elements=[Condition.id],
         set_={
+            "run_id": stmt.excluded.run_id,
             "patient_id": stmt.excluded.patient_id,
             "clinical_status": stmt.excluded.clinical_status,
             "verification_status": stmt.excluded.verification_status,
@@ -113,6 +117,7 @@ def upsert_medication_requests(db: Session, rows: list[dict]) -> int:
     stmt = stmt.on_conflict_do_update(
         index_elements=[MedicationRequest.id],
         set_={
+            "run_id": stmt.excluded.run_id,
             "patient_id": stmt.excluded.patient_id,
             "status": stmt.excluded.status,
             "intent": stmt.excluded.intent,

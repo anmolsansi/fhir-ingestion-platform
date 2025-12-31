@@ -12,6 +12,18 @@ services:
       - db
     volumes:
       - ./exports:/app/exports
+      - ./scripts:/app/scripts:ro
+  scheduler:
+    image: alpine:3.20
+    depends_on:
+      - api
+    environment:
+      - API_BASE_URL=http://api:8000
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL}
+    volumes:
+      - ./scripts/cronjobs:/etc/crontabs/root:ro
+      - ./scripts:/app/scripts:ro
+    command: sh -c "apk add --no-cache curl && crond -f -l 2"
 
   db:
     image: postgres:16
