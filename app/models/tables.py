@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from datetime import datetime, timezone
+
 from sqlalchemy import Integer, String, Date, DateTime, JSON, ForeignKey, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,7 +48,11 @@ class IngestionRun(Base):
     __tablename__ = "ingestion_runs"
     id: Mapped[int] = mapped_column(primary_key=True)
     resource_type: Mapped[str] = mapped_column(String, index=True)
-    started_at: Mapped[str] = mapped_column(String, default=lambda: func.now().cast(String), index=True)
+    started_at: Mapped[str] = mapped_column(
+        String,
+        default=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        index=True,
+    )
     finished_at: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="RUNNING", index=True)  # RUNNING/SUCCESS/FAILED
     details: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -56,7 +62,10 @@ class Checkpoint(Base):
     __tablename__ = "checkpoints"
     resource_type: Mapped[str] = mapped_column(String, primary_key=True)
     last_successful_lastupdated: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    updated_at: Mapped[str] = mapped_column(String, default=lambda: func.now().cast(String))
+    updated_at: Mapped[str] = mapped_column(
+        String,
+        default=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    )
 
 
 class DeadLetter(Base):
@@ -68,7 +77,10 @@ class DeadLetter(Base):
     stage: Mapped[str] = mapped_column(String, index=True)
     error: Mapped[str] = mapped_column(String)
     raw: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[str] = mapped_column(String, default=lambda: func.now().cast(String))
+    created_at: Mapped[str] = mapped_column(
+        String,
+        default=lambda: datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    )
 class Encounter(Base):
     __tablename__ = "encounters"
     id: Mapped[str] = mapped_column(String, primary_key=True)

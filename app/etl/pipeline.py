@@ -95,10 +95,20 @@ def _effective_since(since_checkpoint: str | None) -> str | None:
     return max(floors)
 
 
-def _update_max_timestamp(current: str | None, candidate: str | None) -> str | None:
-    if candidate and (current is None or candidate > current):
-        return candidate
-    return current
+def _update_max_timestamp(current: str | None, candidate) -> str | None:
+    current_norm = _normalize_last_updated(current)
+    candidate_norm = _normalize_last_updated(candidate)
+    if candidate_norm and (current_norm is None or candidate_norm > current_norm):
+        return candidate_norm
+    return current_norm
+
+
+def _normalize_last_updated(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat().replace("+00:00", "Z")
+    return str(value)
 
 
 def _safe_validate(db: Session, items, validator, resource_type: str, run_id: int, dead_letters: list[dict]):
@@ -248,12 +258,14 @@ def _get_checkpoint(db: Session, resource_type: str) -> str | None:
 
 
 def _set_checkpoint(db: Session, resource_type: str, last_updated: str):
+    normalized = _normalize_last_updated(last_updated)
     row = db.execute(select(Checkpoint).where(Checkpoint.resource_type == resource_type)).scalar_one_or_none()
     if not row:
-        row = Checkpoint(resource_type=resource_type, last_successful_lastupdated=last_updated)
+        row = Checkpoint(resource_type=resource_type, last_successful_lastupdated=normalized)
         db.add(row)
     else:
-        row.last_successful_lastupdated = last_updated
+        row.last_successful_lastupdated = normalized
+        row.updated_at = _utc_now_iso()
 
 
 def _filter_rows_by_patient(
@@ -498,8 +510,7 @@ def ingest_observations(
         max_last_updated = since_checkpoint
         for item in valid:
             lu = (item.get("meta") or {}).get("lastUpdated")
-            if lu and (max_last_updated is None or lu > max_last_updated):
-                max_last_updated = lu
+            max_last_updated = _update_max_timestamp(max_last_updated, lu)
 
         checkpoint_after = since_checkpoint
         should_advance = (load_errors == 0) and (skipped_missing_patients == 0) and (not patient_id)
@@ -612,8 +623,7 @@ def ingest_observations_with_backfill(
         max_last_updated = since_checkpoint
         for item in valid:
             lu = (item.get("meta") or {}).get("lastUpdated")
-            if lu and (max_last_updated is None or lu > max_last_updated):
-                max_last_updated = lu
+            max_last_updated = _update_max_timestamp(max_last_updated, lu)
 
         checkpoint_after = since_checkpoint
         should_advance = (

@@ -126,6 +126,7 @@ def ingest_patients_endpoint(
     airflow_run_id: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    print("Inside ingest_patients_endpoint", FHIR_BASE_URL)
     client = FHIRClient(FHIR_BASE_URL)
     try:
         run_meta = _build_run_meta(
@@ -138,6 +139,7 @@ def ingest_patients_endpoint(
             airflow_task_id,
             airflow_run_id,
         )
+        print(f"Running patient ingestion with metadata: {run_meta}")
         return ingest_patients(db, client, run_meta=run_meta)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Upstream FHIR request failed: {exc}") from exc
