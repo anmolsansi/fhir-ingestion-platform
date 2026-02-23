@@ -114,8 +114,8 @@ When you hit an ingest endpoint:
   Get recent runs.
 - `GET /runs/{run_id}`
   Details about a run + dead-letter counts.
-- `GET /runs/{run_id}/deadletters?limit=200`
-  List the failed items.
+- `GET /runs/{run_id}/deadletters?limit=200&offset=0&stage=validate`
+  List failed items with optional pagination (`limit`/`offset`) and optional stage filter (`validate|transform|load`).
 - `POST /runs/{run_id}/replay?stage=validate|transform|load`
   Retry failed items.
 
