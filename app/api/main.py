@@ -507,16 +507,23 @@ def get_run(
 def get_run_deadletters(
     run_id: int,
     limit: int = 50,
+    offset: int = 0,
+    stage: str | None = None,
     include_raw: bool = False,
     db: Session = Depends(get_db),
 ):
     limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+
+    query = select(DeadLetter).where(DeadLetter.run_id == run_id)
+    if stage:
+        query = query.where(DeadLetter.stage == stage)
 
     deadletters = (
         db.execute(
-            select(DeadLetter)
-            .where(DeadLetter.run_id == run_id)
+            query
             .order_by(DeadLetter.id.desc())
+            .offset(offset)
             .limit(limit)
         )
         .scalars()
